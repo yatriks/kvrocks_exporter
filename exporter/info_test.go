@@ -274,6 +274,70 @@ func TestParseCommandStats(t *testing.T) {
 	}
 }
 
+func TestHandleMetricsRocksDB(t *testing.T) {
+	e := &Exporter{
+		namespace:          "test",
+		metricDescriptions: map[string]*prometheus.Desc{},
+		options:            Options{Namespace: "test"},
+	}
+
+	// Initialize metric descriptions for all RocksDB metrics
+	for _, metric := range []string{
+		"block_cache_usage",
+		"block_cache_pinned_usage",
+		"index_and_filter_cache_usage",
+		"estimate_keys",
+		"level0_file_limit_slowdown",
+		"level0_file_limit_stop",
+		"pending_compaction_bytes_slowdown",
+		"pending_compaction_bytes_stop",
+		"memtable_count_limit_slowdown",
+		"memtable_count_limit_stop",
+		"estimate_pending_compaction_bytes",
+	} {
+		e.metricDescriptions[metric] = newMetricDescr("test", metric, "test metric", []string{"column_family"})
+	}
+
+	for _, tst := range []struct {
+		fieldKey    string
+		fieldValue  string
+		wantSuccess bool
+	}{
+		// Shared metric (no column family)
+		{fieldKey: "block_cache_usage", fieldValue: "2352699808", wantSuccess: true},
+		// Metrics with column families
+		{fieldKey: "estimate_keys[default]:", fieldValue: "877780692", wantSuccess: true},
+		{fieldKey: "estimate_keys[metadata]:", fieldValue: "137466612", wantSuccess: true},
+		{fieldKey: "block_cache_pinned_usage[default]:", fieldValue: "3279920", wantSuccess: true},
+		{fieldKey: "index_and_filter_cache_usage[search]:", fieldValue: "852223", wantSuccess: true},
+		{fieldKey: "pending_compaction_bytes_slowdown[default]:", fieldValue: "56", wantSuccess: true},
+		{fieldKey: "memtable_count_limit_stop[metadata]:", fieldValue: "0", wantSuccess: true},
+		{fieldKey: "estimate_pending_compaction_bytes[default]:", fieldValue: "253026582751", wantSuccess: true},
+		{fieldKey: "estimate_pending_compaction_bytes[search]:", fieldValue: "1301854178", wantSuccess: true},
+		// Invalid/bad data cases
+		{fieldKey: "unknown_metric[default]:", fieldValue: "100", wantSuccess: false},
+		{fieldKey: "estimate_keys[default]:", fieldValue: "not_a_number", wantSuccess: false},
+	} {
+		t.Run(tst.fieldKey+tst.fieldValue, func(t *testing.T) {
+			chM := make(chan prometheus.Metric, 1)
+			e.handleMetricsRocksDB(chM, tst.fieldKey, tst.fieldValue)
+			close(chM)
+
+			metricCount := 0
+			for range chM {
+				metricCount++
+			}
+
+			if tst.wantSuccess && metricCount == 0 {
+				t.Fatalf("expected metric to be emitted but got none")
+			}
+			if !tst.wantSuccess && metricCount > 0 {
+				t.Fatalf("expected no metric but got %d", metricCount)
+			}
+		})
+	}
+}
+
 func TestParseCommandStatsHist(t *testing.T) {
 
 	for _, tst := range []struct {
