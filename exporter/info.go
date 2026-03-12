@@ -295,6 +295,7 @@ func (e *Exporter) handleMetricsRocksDB(ch chan<- prometheus.Metric, fieldKey st
 		"block_cache_usage", "block_cache_pinned_usage", "index_and_filter_cache_usage", "estimate_keys",
 		"level0_file_limit_slowdown", "level0_file_limit_stop", "pending_compaction_bytes_slowdown",
 		"pending_compaction_bytes_stop", "memtable_count_limit_slowdown", "memtable_count_limit_stop",
+		"estimate_pending_compaction_bytes",
 	}
 	for _, prefix := range prefixs {
 		// format like `estimate_keys[default]:0`
